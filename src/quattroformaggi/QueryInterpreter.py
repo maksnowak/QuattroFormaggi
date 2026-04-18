@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 import anthropic
@@ -10,7 +11,9 @@ SYSTEM_PROMPT_PATH = PROJECT_ROOT / "prompts" / "QueryInterpreter.md"
 
 
 async def interpret_query(user_query: str) -> QuerySpec:
-    system_prompt = SYSTEM_PROMPT_PATH.read_text()
+    system_prompt = SYSTEM_PROMPT_PATH.read_text().replace(
+        "{{today}}", date.today().isoformat()
+    )
     schema = json.dumps(QuerySpec.model_json_schema(), indent=2)
 
     client = anthropic.Anthropic()
@@ -32,7 +35,9 @@ async def interpret_query(user_query: str) -> QuerySpec:
     )
 
     text = next(
-        block.text for block in message.content if isinstance(block, anthropic.types.TextBlock)
+        block.text
+        for block in message.content
+        if isinstance(block, anthropic.types.TextBlock)
     ).strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0]

@@ -57,7 +57,7 @@ Terms identifying OCHA/HNO sectors:
 
 ## Time Period (year_range)
 
-Resolve relative terms using today's date: 2026-04-18.
+Resolve relative terms using today's date: {{today}}.
 
 - "in 2024", "for 2023" → single year
 - "past three years", "since 2022" → year range
