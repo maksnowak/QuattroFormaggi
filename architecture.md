@@ -1,4 +1,4 @@
-# Briefing Note Generator — Agent Architecture Plan
+# Briefing Note Generator — Agent Architecture
 
 ## Context
 
@@ -8,7 +8,9 @@ The user also wants a filter/keyword UI so coordinators can focus on specific re
 
 ---
 
-## Architecture: Six-Agent Linear Pipeline
+## Architecture: Five-Agent Linear Pipeline
+
+> All data is loaded from pre-declared, pre-downloaded public datasets. No live web search is used — every external source is declared upfront in `METHODOLOGY.md`.
 
 ### Agent 1: `QueryInterpreterAgent`
 - **Model:** `claude-haiku-4-5` (low cost, high throughput)
@@ -18,9 +20,15 @@ The user also wants a filter/keyword UI so coordinators can focus on specific re
 
 ### Agent 2: `DataIngestorAgent`
 - **Model:** none — pure Python
-- **Input:** `QuerySpec`, paths to 5 CSV datasets
+- **Input:** `QuerySpec`, paths to all declared datasets (primary + supplementary, see below)
 - **Output:** `IngestedDataset` — list of `CrisisRecord` objects + `DataQualityReport`
-- **Uncertainty:** every `CrisisRecord` has a `data_flags: [str]` field — non-optional, carries caveats like "HNO data is 3 years old" or "No formal HRP on file"
+- **Uncertainty:** every `CrisisRecord` has a `data_flags: [str]` field — non-optional, carries caveats like "HNO data is 3 years old", "No formal HRP on file", "IPC phase unavailable for this country"
+- **Supplementary signals loaded here (no LLM, no web search):**
+  - IPC phase per country — from pre-downloaded IPC Global Acute Food Insecurity CSV (ipcinfo.org)
+  - UNHCR displacement figures — from pre-downloaded UNHCR Refugee Data Finder CSV (unhcr.org)
+  - Donor concentration (HHI score) — computed from CBPF donor breakdown already in primary datasets
+  - Prior-year coverage ratios — computed from multi-year HRP data already in primary datasets
+  - Media visibility: dropped — no offline proxy available
 
 ### Agent 3: `GapScoringAgent`
 - **Model:** none — pure Python (`pandas`, `numpy`)
@@ -29,40 +37,33 @@ The user also wants a filter/keyword UI so coordinators can focus on specific re
 - **Gap score formula:** `(1 - coverage_ratio) * log_pin_weight`; crises without HRP ranked separately; bare numbers never emitted — always paired with confidence tier
 - **Bonus:** `structural_neglect_flag` set when underfunded for 3+ consecutive years
 
-### Agent 4: `ContextEnrichmentAgent`
-- **Model:** `claude-sonnet-4-6` with `web_search` tool
-- **Input:** top-N `ScoredCrisis` records (default 5)
-- **Output:** `EnrichedContext` per crisis — IPC phase, UNHCR displacement, media visibility, donor concentration, prior-year coverage ratios
-- **Uncertainty:** system prompt bans inference; every figure requires source URL + publication date; missing figures return `null` with explanation; `enrichment_caveats` is non-optional
-- **Runs in parallel** via `asyncio.gather()` — one API call per crisis
-
-### Agent 5: `BriefingNoteWriterAgent`
+### Agent 4: `BriefingNoteWriterAgent`
 - **Model:** `claude-opus-4-7` with `thinking: {"type": "adaptive"}`, streaming enabled
-- **Input:** `ScoredCrisisList` + `EnrichedContext` list + `QuerySpec` + `DataQualityReport`
+- **Input:** `ScoredCrisisList` + `QuerySpec` + `DataQualityReport` (enrichment signals are fields on `CrisisRecord` itself)
 - **Output:** `BriefingNote` — executive summary, ranked table (with confidence column), top-3 narratives, methodology disclosure, limitations list (minimum 3, enforced)
 - **Banned phrases in system prompt:** "the data shows", bare percentages, "X country is underfunded" without qualifier
 - **Required constructions:** "available data from [source, year] suggests...", "approximately [range]", confidence level on every gap score
 
-### Agents 6a–6c: Review Panel (run in parallel via `asyncio.gather()`)
+### Agents 5a–5c: Review Panel (run in parallel via `asyncio.gather()`)
 
 Three independent reviewers, each with a narrow focus and extended thinking enabled. They run simultaneously on the same draft and cannot see each other's outputs — independence is the mechanism that catches what a single reviewer would rationalize away.
 
-**6a. `FactCheckReviewAgent`**
+**5a. `FactCheckReviewAgent`**
 - **Model:** `claude-sonnet-4-6` with `thinking: {"type": "enabled", "budget_tokens": 5000}`
-- **Focus:** Hallucination and fabrication — does every figure in the note actually appear in `ScoredCrisisList` or `EnrichedContext`? Does any country, statistic, or source citation appear that wasn't in the input data?
-- **Checklist:** (1) cross-reference every numeric claim against input data, (2) flag any source URL not present in `EnrichedContext`, (3) flag any country name not in `ScoredCrisisList`, (4) flag any claim using language stronger than the underlying enrichment confidence level permits
+- **Focus:** Hallucination and fabrication — does every figure in the note actually appear in `ScoredCrisisList`? Does any country, statistic, or source citation appear that wasn't in the input data?
+- **Checklist:** (1) cross-reference every numeric claim against `ScoredCrisisList` fields, (2) flag any dataset name not in the declared sources list, (3) flag any country name not in `ScoredCrisisList`, (4) flag any claim using language stronger than the underlying `score_confidence` permits
 
-**6b. `ConfidenceCalibrationReviewAgent`**
+**5b. `ConfidenceCalibrationReviewAgent`**
 - **Model:** `claude-sonnet-4-6` with `thinking: {"type": "enabled", "budget_tokens": 5000}`
-- **Focus:** Language-level overconfidence — does any prose claim a higher certainty than the `score_confidence` or `enrichment_confidence` of the underlying record?
+- **Focus:** Language-level overconfidence — does any prose claim a higher certainty than the `score_confidence` of the underlying record?
 - **Checklist:** (1) scan for banned phrases ("the data shows", "X is underfunded"), (2) verify every coverage ratio has a confidence qualifier, (3) verify LOW-confidence records are described with appropriately hedged language, (4) check the executive summary explicitly names the most significant data limitation
 
-**6c. `CompletenessReviewAgent`**
+**5c. `CompletenessReviewAgent`**
 - **Model:** `claude-sonnet-4-6` with `thinking: {"type": "enabled", "budget_tokens": 3000}`
 - **Focus:** Structural completeness — are all required sections present and all propagated flags surfaced?
 - **Checklist:** (1) all mandatory sections present, (2) every `data_flag` from input `CrisisRecord` objects appears somewhere in limitations or caveats, (3) limitations list has ≥3 items, (4) `decision_support_note` present and unmodified, (5) no-HRP crises listed separately
 
-### Agent 6d: `ReviewAggregatorAgent`
+### Agent 5d: `ReviewAggregatorAgent`
 - **Model:** none — pure Python
 - **Input:** three `ReviewResult` objects
 - **Output:** single merged `AggregatedReview` — union of all `issues_found` across reviewers, deduplicated by location + description; overall `passed` is `True` only if all three reviewers pass
@@ -70,11 +71,11 @@ Three independent reviewers, each with a narrow focus and extended thinking enab
 
 ### Orchestrator (no LLM)
 ```
-QueryInterpreter → DataIngestor → GapScorer → ContextEnrichment (parallel) →
-BriefingWriter → [6a, 6b, 6c in parallel] → ReviewAggregator →
+QueryInterpreter → DataIngestor (all datasets) → GapScorer →
+BriefingWriter → [5a, 5b, 5c in parallel] → ReviewAggregator →
     passed? → Final Output
     failed? → BriefingWriter (with merged issues, 1 retry max) →
-              [6a, 6b, 6c in parallel] → ReviewAggregator →
+              [5a, 5b, 5c in parallel] → ReviewAggregator →
               passed? → Final Output
               failed? → Final Output + issues appended to limitations
 ```
@@ -119,6 +120,25 @@ The ranked table in the UI shows a **Confidence** column and a **Key Caveat** co
 
 ---
 
+## Declared Data Sources
+
+### Primary (provided by challenge)
+| Dataset | Source | Notes |
+|---|---|---|
+| Humanitarian Needs Overview (HNO) | OCHA HDX | People in need by country/sector |
+| Humanitarian Response Plans (HRP) | OCHA HDX | Funding targets and plan status |
+| Global Requirements and Funding | OCHA HDX | Overall financial tracking |
+| CBPF Pooled Funds | cbpf.data.unocha.org | Country-based pooled fund allocations |
+| COD Global Population | OCHA HDX | Baseline population figures |
+
+### Supplementary (pre-downloaded, declared)
+| Dataset | Source | Signals extracted |
+|---|---|---|
+| IPC Global Acute Food Insecurity | ipcinfo.org | IPC phase per country |
+| UNHCR Refugee Data Finder | unhcr.org | IDP and refugee displacement figures |
+
+---
+
 ## Tech Stack
 
 | Component | Choice | Reason |
@@ -127,7 +147,7 @@ The ranked table in the UI shows a **Confidence** column and a **Key Caveat** co
 | LLM SDK | `anthropic` (direct) | No LangChain; full control for auditability |
 | Data models | `pydantic` v2 | Validated inter-agent handoffs; ValidationError on bad data |
 | Data processing | `pandas`, `numpy` | Gap scoring, normalization |
-| Async | `asyncio` | Parallel enrichment calls |
+| Async | `asyncio` | Parallel review panel calls |
 | UI | Streamlit | No frontend overhead; sidebar filters + dataframe + markdown native |
 | Logging | `structlog` | Structured audit trail per pipeline run |
 | Prompt caching | `cache_control: {"type": "ephemeral"}` on all system prompts | Stable long prompts — significant cost saving on repeated runs |
@@ -146,14 +166,15 @@ agents/
   query_interpreter.py
   data_ingestor.py
   gap_scorer.py
-  context_enrichment.py
   briefing_writer.py
   fact_check_review.py
   confidence_calibration_review.py
   completeness_review.py
   review_aggregator.py        # pure Python, merges three ReviewResults
 app.py             # Streamlit entrypoint
-data/              # raw CSVs (gitignored)
+data/
+  primary/         # OCHA/HDX datasets (gitignored)
+  supplementary/   # IPC, UNHCR pre-downloaded CSVs (gitignored)
 outputs/           # generated notes (gitignored)
 tests/
   test_gap_scoring.py
@@ -163,6 +184,7 @@ tests/
 requirements.txt
 .env.example
 METHODOLOGY.md
+ARCHITECTURE.md    # this file
 ```
 
 ---
@@ -188,7 +210,7 @@ METHODOLOGY.md
 `src/models/` → `src/data/loaders.py` → validators/normalizers → `agents/data_ingestor.py` → `src/data/gap_scoring.py` → `agents/gap_scorer.py` → `tests/`
 
 **Phase 2 — LLM integration:**
-`src/prompts/` (write all prompts first) → `agents/query_interpreter.py` → `agents/context_enrichment.py` → `agents/briefing_writer.py` → `agents/fact_check_review.py` + `agents/confidence_calibration_review.py` + `agents/completeness_review.py` → `agents/review_aggregator.py`
+`src/prompts/` (write all prompts first) → `agents/query_interpreter.py` → `agents/briefing_writer.py` → `agents/fact_check_review.py` + `agents/confidence_calibration_review.py` + `agents/completeness_review.py` → `agents/review_aggregator.py`
 
 **Phase 3 — Orchestration and UI:**
 `src/orchestrator.py` → `app.py` → `METHODOLOGY.md`
@@ -199,6 +221,5 @@ METHODOLOGY.md
 
 1. Run `tests/test_gap_scoring.py` against synthetic fixtures — validate ranking correctness and confidence tier assignment before any API calls
 2. Run `agents/data_ingestor.py` against real HDX CSV downloads — verify `data_flags` are generated correctly for stale/missing records
-3. Run full pipeline in `--no-enrichment` mode (offline) — verify briefing note renders with graceful degradation
-4. Run full pipeline with enrichment — verify `DECISION SUPPORT NOTICE` is present and unmodified in output
-5. Manually review a generated note: confirm no bare percentages, all claims have source citations, limitations section has ≥3 items
+3. Run full pipeline offline — verify `DECISION SUPPORT NOTICE` is present and unmodified in output
+4. Manually review a generated note: confirm no bare percentages, all claims have source citations, limitations section has ≥3 items
