@@ -1,4 +1,6 @@
 CERF - centrial emergency relief fund (suddenly, the government has to pay a lot of money to people who lost their jobs during the pandemic, so they created this fund to help them out)
+
+
 CBPS - country based pool system (a system where countries can pool their resources together to help each other out during times of crisis, like the pandemic)
 
 Not enough money to help everyone. The UN needs to decide how to distribute the money. 
