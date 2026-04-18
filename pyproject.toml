@@ -9,7 +9,6 @@ authors = [
 requires-python = ">=3.12.3"
 dependencies = [
     "anthropic>=0.96.0",
-    "claude-agent-sdk>=0.1.63",
     "pydantic>=2.10.6",
     "python-dotenv>=1.2.2",
 ]

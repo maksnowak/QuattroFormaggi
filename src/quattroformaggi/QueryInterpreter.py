@@ -1,42 +1,39 @@
 import json
 from pathlib import Path
 
-from claude_agent_sdk import (
-    AssistantMessage,
-    ClaudeAgentOptions,
-    TextBlock,
-    query,
-)
+import anthropic
 
 from models.QuerySpec import QuerySpec
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-WORKFLOW_PATH = PROJECT_ROOT / "agents" / "workflows" / "QueryInterpreter.md"
+SYSTEM_PROMPT_PATH = PROJECT_ROOT / "prompts" / "QueryInterpreter.md"
 
 
 async def interpret_query(user_query: str) -> QuerySpec:
+    system_prompt = SYSTEM_PROMPT_PATH.read_text()
     schema = json.dumps(QuerySpec.model_json_schema(), indent=2)
 
-    options = ClaudeAgentOptions(
-        system_prompt={"type": "file", "path": str(WORKFLOW_PATH)},
-        cwd=str(PROJECT_ROOT),
-        allowed_tools=["Read"],
-        permission_mode="bypassPermissions",
+    client = anthropic.Anthropic()
+
+    message = client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"Interpret this query:\n\n{user_query}\n\n"
+                    "Respond with a single JSON object matching this schema — no markdown, no explanation:\n"
+                    f"{schema}"
+                ),
+            }
+        ],
     )
 
-    prompt = (
-        "Read all files referenced in your workflow instructions before responding. "
-        f"Then interpret this query:\n\n{user_query}\n\n"
-        "Respond with a single JSON object matching this schema — no markdown, no explanation:\n"
-        f"{schema}"
-    )
-
-    parts: list[str] = []
-
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    parts.append(block.text)
-
-    return QuerySpec.model_validate_json("".join(parts))
+    text = next(
+        block.text for block in message.content if isinstance(block, anthropic.types.TextBlock)
+    ).strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+    return QuerySpec.model_validate_json(text)
