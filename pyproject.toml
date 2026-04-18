@@ -9,7 +9,9 @@ authors = [
 requires-python = ">=3.12.3"
 dependencies = [
     "anthropic>=0.96.0",
+    "pandas>=3.0.2",
     "pydantic>=2.10.6",
+    "pyspark>=4.1.1",
     "python-dotenv>=1.2.2",
 ]
 
