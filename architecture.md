@@ -85,26 +85,28 @@ BriefingWriter → [5a, 5b, 5c in parallel] → ReviewAggregator →
 
 ---
 
-## Filter and Keyword System
+## Query and Keyword System
 
-A **multi-dimensional facet selector** (not a free-text search box) in the Streamlit sidebar:
+The UI exposes a single natural language text input. The `QueryInterpreterAgent` extracts structured filter criteria from it and shows its interpretation visibly before running.
 
-| Dimension | Type |
-|---|---|
-| Region / Subregion / Country | Multi-select (cascading) |
-| Sector | Multi-select (OCHA taxonomy) |
-| Crisis Type | Single-select |
-| Minimum People in Need | Slider (0–50M+) |
-| Max Coverage Ratio | Slider ("show crises funded below X%") |
-| Year Range | Range slider |
-| HRP Status | Multi-select (Active / Flash Appeal / No HRP / Unknown) |
-| Structural Neglect Only | Toggle |
+**Recognized keyword concepts** (see `agents/knowledge/keywords.md` for full examples):
 
-A natural-language text input sits above the panel. The `QueryInterpreterAgent` maps it to filter state and shows its interpretation visibly before running:
+| Concept | What to write | Maps to |
+|---|---|---|
+| Geographic scope | "in the Sahel", "in Sudan", "across MENA" | `regions`, `countries` |
+| Sector | "food crises", "WASH gaps", "health emergencies" | `sectors` |
+| Crisis type | "conflict", "natural disaster", "displacement" | `crisis_types` |
+| Scale of need | "large-scale", "affecting over 2 million people" | `min_people_in_need` |
+| Funding gap | "underfunded", "less than 20% funded", "critical gap" | `max_coverage_ratio` |
+| Time period | "in 2024", "over the past three years", "recent" | `year_range` |
+| HRP status | "with no response plan", "flash appeals only" | `hrp_status` |
+| Structural neglect | "chronically neglected", "forgotten crises" | `structural_neglect_only` |
 
-> "Interpreted as: Sector = Food Security; Subregion = Sahel (Chad, Mali, Niger, ...); Coverage < 30%. **Confidence: medium.** Note: 'Sahel' boundary is approximate. Edit filters to adjust."
+The agent shows its interpretation before running:
 
-Active filter state is serialized into the briefing note header for reproducibility.
+> "Interpreted as: Sector = Food Security; Countries = Chad, Mali, Mauritania, Niger, Burkina Faso, Sudan, Senegal; Coverage ≤ 30%. **Confidence: medium.** Note: 'Sahel' boundary is approximate — edit your query to adjust."
+
+The resolved `QuerySpec` is serialized into the briefing note header for reproducibility.
 
 ---
 
