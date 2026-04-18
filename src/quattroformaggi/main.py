@@ -20,7 +20,7 @@ def run():
 
     master_table_path = "unocha.default.master_table"
 
-    filtered_data = filter_humanitarian_data(agent_json, spark, master_table_path)
+    filtered_df = filter_humanitarian_data(agent_json, spark, master_table_path)
 
     data_as_csv_string = filtered_df.toPandas().to_csv(index=False)
 
