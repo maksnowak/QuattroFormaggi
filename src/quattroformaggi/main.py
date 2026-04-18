@@ -10,4 +10,8 @@ def run():
     result = asyncio.run(
         interpret_query("show underfunded food crises in the Sahel since 2022")
     )
+
+
+
+    
     print(result.model_dump_json())
