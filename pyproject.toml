@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12.3"
 dependencies = [
+    "anthropic>=0.96.0",
     "pydantic>=2.10.6",
 ]
 
