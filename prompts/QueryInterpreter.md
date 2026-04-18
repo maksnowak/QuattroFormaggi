@@ -32,6 +32,31 @@ Terms identifying OCHA/HNO sectors:
 - "malnutrition", "wasting", "stunting" → Nutrition
 - No sector term → no sector filter
 
+Return one of the codes listed below:
+
+| Code | Sector Description |
+| --- | --- |
+| PRO | Protection (overall) |
+| FSC | Food Security |
+| ALL | Final caseload |
+| PRO-GBV | Gender-Based Violence (GBV) |
+| WSH | Water, Sanitation and Hygiene |
+| HEA | Health |
+| PRO-CPN | Child Protection |
+| SHL | Emergency Shelter |
+| NUT | Nutrition |
+| EDU | Education |
+| PRO-MIN | Mine Action |
+| PRO-HLP | Housing, Land and Property |
+| CCM | Camp Coordination And Camp Management |
+| AGR | Agriculture |
+| MPC | Multi-Purpose Cash |
+| MS | Refugees and Migrant Multisector |
+| CSS | Rapid Response Mechanism (RRM) |
+| ERY | Early Recovery and Livelihoods |
+| LOG | Logistics |
+| TEL | Emergency Telecommunications |
+
 ## Crisis Type
 
 - "conflict", "war", "armed conflict" → Conflict

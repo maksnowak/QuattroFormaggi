@@ -1,10 +1,33 @@
 from pydantic import BaseModel
 from typing_extensions import Literal
 
+SectorCode = Literal[
+    "PRO",
+    "FSC",
+    "ALL",
+    "PRO-GBV",
+    "WSH",
+    "HEA",
+    "PRO-CPN",
+    "SHL",
+    "NUT",
+    "EDU",
+    "PRO-MIN",
+    "PRO-HLP",
+    "CCM",
+    "AGR",
+    "MPC",
+    "MS",
+    "CSS",
+    "ERY",
+    "LOG",
+    "TEL",
+]
+
 
 class QuerySpec(BaseModel):
     regions: list[str] | None
-    sectors: list[str] | None
+    sectors: list[SectorCode] | None
     crisis_types: list[str] | None
     min_scale_of_need: int | None
     max_coverage_ratio: float | None
