@@ -1,0 +1,7 @@
+We've integrated Claude into virtually every single step of our solution.
+First of all, a natural-language query gets processed and turned into an SQL.
+Then, that SQL query is evaluated against a table, and appropriate response action is taken.
+Afterwards, relevant articles are pulled and a forecast based on them is created by Claude.
+Finally, all of the aforementioned data is used to create a natural-language briefing answering the user query.
+
+Our solution required models that hallucinate the least. Claude API is an advanced tool that allows that, and this is exactly why we've integrated it throughout our solution.
