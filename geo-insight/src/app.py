@@ -19,6 +19,7 @@ from databricks import sql
 from quattroformaggi.BriefingNoteWriter import brief_writer
 from quattroformaggi.QueryInterpreter import interpret_query
 from quattroformaggi.query_to_sql import filter_humanitarian_data
+from quattroformaggi.query_to_articles import filter_articles
 
 print("[DEBUG] All imports successful")
 print(os.environ)
@@ -39,6 +40,7 @@ async def chat_pipeline(message):
 
         # Step 2: Fetch and filter data using Databricks SQL Connector
         master_table_path = "unocha.default.master_table"
+        master_articles_path = "unocha.default.reliefweb_cleaned"
         print(f"[DEBUG] Step 2: Connecting to Databricks SQL...")
         print(f"[DEBUG] Master table: {master_table_path}")
         
@@ -60,6 +62,7 @@ async def chat_pipeline(message):
         try:
             print("[DEBUG] Calling filter_humanitarian_data...")
             filtered_df = filter_humanitarian_data(agent_json, connection, master_table_path)
+            filtered_articles = filter_articles(agent_json, connection, master_articles_path)
             print(f"[DEBUG] Filtered DataFrame shape: {filtered_df.shape}")
             print(f"[DEBUG] Filtered DataFrame columns: {list(filtered_df.columns)}")
             if filtered_df.empty:
@@ -83,11 +86,13 @@ async def chat_pipeline(message):
         # Step 3: Convert the filtered DataFrame
         print("[DEBUG] Step 3: Converting DataFrame to CSV...")
         data_as_csv_string = filtered_df.to_csv(index=False)
+        articles_as_string = filtered_articles.to_csv(index=False)
         print(f"[DEBUG] CSV string length: {len(data_as_csv_string)} characters")
+        print(f"[DEBUG] Articles string length: {len(articles_as_string)} characters")
 
         # Step 4: Agent 2 generates the Briefing Note based on the data
         print("[DEBUG] Step 4: Calling brief_writer...")
-        agent2_result = await brief_writer(data_as_csv_string, message, agent1_result)
+        agent2_result = await brief_writer(data_as_csv_string, message, articles_as_string, agent1_result)
         print(f"[DEBUG] Agent 2 result length: {len(agent2_result)} characters")
         
         # Return the generated report to the UI
@@ -270,7 +275,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Default(neutral_hue="slate")) as 
     # ---------------------------
     with gr.Column(visible=True, elem_classes=["center-container"]) as search_view:
         gr.Markdown(
-            "<h1 style='text-align: center;'>Geo-Insight: GapFinder Assistant</h1>"
+            "<h1 style='text-align: center;'>Geo-Insight Assistant</h1>"
             "<p style='text-align: center; color: #555555 !important; margin-bottom: 30px;'>Ask a natural language question about financial gaps in humanitarian crises. The system will query the underlying data and generate a professional Briefing Note.</p>"
         )
         
@@ -286,8 +291,8 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Default(neutral_hue="slate")) as 
         gr.Examples(
             examples=[
                 "Show underfunded food crises in the Sahel since 2022.",
-                "Current state of Middle East",
-                "History of funding in Africa"
+                "Current state of Middle East.",
+                "History of funding in Africa."
             ],
             inputs=user_input
         )

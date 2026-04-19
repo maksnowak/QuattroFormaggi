@@ -2,7 +2,7 @@ import json
 import pandas as pd
 from databricks import sql
 
-def filter_humanitarian_data(agent_json_string: str, connection, table_name: str) -> pd.DataFrame:
+def filter_articles(agent_json_string: str, connection, table_name: str) -> pd.DataFrame:
     """
     Filtruje tabelę na podstawie parametrów z agenta JSON.
     Zwraca przefiltrowany obiekt Pandas DataFrame.
@@ -31,18 +31,16 @@ def filter_humanitarian_data(agent_json_string: str, connection, table_name: str
         regions = filters["regions"]
         # Tworzy ciąg "?, ?, ?" dopasowany do długości listy
         placeholders = ', '.join(['?'] * len(regions))
-        query += f" AND country_code IN ({placeholders})"
+        query += f" AND country IN ({placeholders})"
         params.extend(regions)
 
     if filters.get("sectors"):
         sectors = filters["sectors"]
         placeholders = ', '.join(['?'] * len(sectors))
-        query += f" AND cluster_code IN ({placeholders})"
+        query += f" AND sector_code IN ({placeholders})"
         params.extend(sectors)
 
-    if filters.get("year_range") and len(filters["year_range"]) == 2:
-        query += " AND year BETWEEN ? AND ?"
-        params.extend(filters["year_range"])
+    query+="LIMIT 20"
 
     # 4. Wykonanie zapytania i zwrócenie wyników jako Pandas DataFrame
     with connection.cursor() as cursor:

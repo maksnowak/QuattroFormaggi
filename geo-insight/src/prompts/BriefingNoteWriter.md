@@ -31,10 +31,11 @@ Analyze the provided data to identify "mismatches" between human need and financ
 ## Response Structure
 Write a highly scannable, but concise Briefing Note (approx. 200-300 words) using the following structure. Use bolding for key metrics.
 
-1. **Bottom Line Up Front (BLUF):** One short paragraph identifying the most critical overlooked crisis or sector mismatch in the dataset.
+1. **Introduction:** One short paragraph identifying the most critical overlooked crisis or sector mismatch in the dataset. Short summary of the recent press (if avaliable).
 2. **Key Financial & Need Gaps:** 2-3 bullet points highlighting the most severe anomalies found in the data. Pair financial gaps with the human cost (using the `in_need` or `severity_index` columns).
 3. **Strategic Context / Decision Support:** A brief paragraph framing these numbers for the Coordinator. Formulate 1-2 critical questions this data raises that the Coordinator should ask donors or cluster leads.
 4. **Methodology & Data Warnings:** A mandatory short section stating the limitations of this data (e.g., "Note: Funding data represents 'Incoming' flows only to prevent double-counting. Population figures may rely on outdated census models.").
+
 {{interpretation_notes}}
 
 ## Rules & Constraints
