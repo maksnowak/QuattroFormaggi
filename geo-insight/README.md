@@ -1,53 +1,108 @@
 # Geo-Insight: GapFinder Assistant - Databricks App
 
-This folder contains a live demo of the Geo-Insight app, hosted using [Databricks Apps](https://www.databricks.com/product/databricks-apps).
+This is a live, publicly accessible Gradio app deployed on Databricks Apps.
 
 ## Prerequisites
 
-- An active [Databricks](https://www.databricks.com/) workspace
-- [Claude API Key](https://platform.claude.com/settings/workspaces/default/keys)
+1. Your quattroformaggi source code needs to be in the `../src/quattroformaggi/` directory relative to this app
+2. The `datathon-scope/ANTHROPIC_API_KEY` secret must be configured in your workspace
+3. Access to the `unocha.default.master_table_final` Unity Catalog table 
 
-## Setup
+# ADD THE FORECAST TABLE HERE
 
-### 1. Configure Databricks Secrets
+### Table generation
 
-The app reads credentials from a Databricks secret scope named `datathon-scope`. Create the scope and add the required secrets:
+In order to get the tables required for the app, follow these steps:
 
-```bash
-databricks secrets create-scope datathon-scope
-databricks secrets put-secret datathon-scope ANTHROPIC_API_KEY --string-value <your-claude-api-key>
-databricks secrets put-secret datathon-scope DATABRICKS_TOKEN --string-value <your-databricks-token>
+1. Download appropriate datasets from the following links:
+   - https://data.humdata.org/dataset/global-hpc-hno (make sure to add the year column in order to distinguish between records in provided CSV files),
+   - https://data.humdata.org/dataset/global-requirements-and-funding-data &ndash; specifically, `fts_requirements_funding_global.csv` and `fts_incoming_funding_global.csv`,
+   - https://data.worldbank.org/indicator/SP.POP.TOTL?end=2023&start=2001 &ndash; in this case, the resulting CSV file should be flattened so that it has 3 columns - `Country Code`, `year` and `population`,
+   - https://www.acaps.org/en/data (optional) &ndash; contains monthly severity indices for countries requires some pre
+
+2. Create a catalog called `unocha` and ingest the downloaded files as tables. In case of most tables, the CSV file name (or its simplified version) is used as the table name. 
+
+## Directory Structure
+
+```
+QuattroFormaggi/
+├── src/
+│   └── quattroformaggi/
+│       ├── BriefingNoteWriter.py
+│       ├── QueryInterpreter.py
+│       ├── query_to_sql.py
+│       └── (other modules)
+│   └── prompts/
+│       ├── QueryInterpreter.md
+│       ├── BriefingNoteWriter.md
+│       └── (other prompts)
+└── gapfinder-app/
+    ├── app.py
+    ├── app.yaml
+    ├── requirements.txt
+    └── README.md (this file)
 ```
 
-### 2. Update the Warehouse HTTP Path
+## Deployment Steps
 
-In `src/app.yaml`, set `DATABRICKS_HTTP_PATH` to the HTTP path of your SQL warehouse. You can find it in the Databricks workspace under **SQL Warehouses → your warehouse → Connection details**.
+### Option 1: Deploy via Databricks UI
 
-### 3. Deploy the App
+1. Click the app switcher (waffle icon) in the top-left
+2. Select **Databricks Apps**
+3. Click **+ Create app**
+4. Choose **Create from existing files**
+5. Navigate to this directory: `/Users/janek.wyrzykowski@gmail.com/QuattroFormaggi/gapfinder-app`
+6. Name your app (e.g., "gapfinder-assistant")
+7. Click **Create app**
+8. Wait 2-3 minutes for deployment
+9. Once status shows **Running**, click the URL to access your live app!
 
-1. Go to the Databricks Apps dashboard and click **Create app**
-2. Choose **Custom app** and give it a name
-3. Under **Source**, point the app at this repository or upload the contents of the `src/` folder
-4. Click **Deploy** — Databricks Apps will install dependencies from `requirements.txt` automatically
-5. `DATABRICKS_HOST` is injected by the platform; all other secrets are pulled from `datathon-scope`
+### Option 2: Deploy via Databricks CLI
+
+1. Install Databricks CLI:
+   ```bash
+   pip install databricks-cli
+   ```
+
+2. Configure authentication:
+   ```bash
+   databricks configure
+   ```
+
+3. Deploy the app:
+   ```bash
+   databricks apps deploy gapfinder-assistant \
+     --source-code-path /Workspace/Users/janek.wyrzykowski@gmail.com/QuattroFormaggi/gapfinder-app
+   ```
+
+4. Check deployment status:
+   ```bash
+   databricks apps get gapfinder-assistant
+   ```
 
 ## App Configuration
 
-| File | Purpose |
-|---|---|
-| `src/app.yaml` | Runtime command, secret bindings, and environment variables |
-| `src/app.py` | Main Gradio application and AI pipeline |
-| `src/requirements.txt` | Python dependencies (`gradio` and `pandas` are pre-installed) |
+* **app.yaml**: Defines how the app runs and environment variables
+* **app.py**: Main Gradio application code
+* **requirements.txt**: Python dependencies (gradio is pre-installed)
 
-### Environment Variables
+## Updating the App
 
-| Variable | Source | Description |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | `datathon-scope` secret | Claude API key for query interpretation and report generation |
-| `DATABRICKS_HOST` | Auto-injected | Workspace hostname |
-| `DATABRICKS_TOKEN` | `datathon-scope` secret | Token for Databricks SQL access |
-| `DATABRICKS_HTTP_PATH` | `app.yaml` (hardcoded) | HTTP path of the target SQL warehouse |
+After making code changes:
+
+1. Via UI: Click **Deploy** button on the app overview page
+2. Via CLI: Run the same `databricks apps deploy` command
+
+## Troubleshooting
+
+* **App fails to start**: Check the Deployments tab for error details
+* **Import errors**: Ensure quattroformaggi source is in the correct relative path
+* **API key errors**: Verify the secret is configured: `databricks secrets get-secret datathon-scope ANTHROPIC_API_KEY`
+* **Table access errors**: Check Unity Catalog permissions for `unocha.default.master_table`
 
 ## App URL
 
-Once deployed, your app will be accessible at the URL shown in the App overview.
+Once deployed, your app will be accessible at:
+`https://<workspace-url>/apps/<app-name>`
+
+This URL is publicly accessible (with workspace authentication) and can be shared with your team!

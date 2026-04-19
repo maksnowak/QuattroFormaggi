@@ -4,3 +4,5 @@
 anthropic
 pydantic
 typing_extensions
+reportlab
+markdown

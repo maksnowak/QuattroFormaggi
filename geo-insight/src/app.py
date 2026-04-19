@@ -23,11 +23,10 @@ from quattroformaggi.query_to_sql import filter_humanitarian_data
 print("[DEBUG] All imports successful")
 print(os.environ)
 
-# Create the main chat pipeline function
-async def chat_pipeline(message, history):
+# Main chat pipeline function (Logic unchanged)
+async def chat_pipeline(message):
     print(f"\n[DEBUG] === Starting chat_pipeline ===")
     print(f"[DEBUG] User message: {message}")
-    print(f"[DEBUG] History length: {len(history) if history else 0}")
     
     try:
         # Step 1: Agent 1 interprets the natural language query
@@ -63,13 +62,23 @@ async def chat_pipeline(message, history):
             filtered_df = filter_humanitarian_data(agent_json, connection, master_table_path)
             print(f"[DEBUG] Filtered DataFrame shape: {filtered_df.shape}")
             print(f"[DEBUG] Filtered DataFrame columns: {list(filtered_df.columns)}")
+            if filtered_df.empty:
+                extended_user_message = message + " Check broader context like other countries in the area (radius of about 500km from the border), simillar context, or broader time period."
+                agent1_extended_result = await interpret_query(message)
+                agent_json_extended = agent1_extended_result.model_dump_json()
+                print(f"[DEBUG] Agent 1 extended response: {agent_json_extended}")
+                filtered_df_extended = filter_humanitarian_data(agent_json_extended, connection, master_table_path)
+                data_as_csv_string_extended = filtered_df_extended.to_csv(index=False)
+                print(f"[DEBUG] Extended CSV string length: {len(data_as_csv_string_extended)} characters")
+                agent2_extended_result = await brief_writer(data_as_csv_string_extended, extended_user_message, agent1_extended_result)
+                print(f"[DEBUG] Agent 2 extended result length: {len(agent2_extended_result)} characters")
         finally:
             connection.close()
             print("[DEBUG] Database connection closed")
-        
-        if filtered_df.empty:
-            print("[DEBUG] No data found, returning empty result message")
-            return "**No Data Found:** Unfortunately, no data matched your criteria. Please try rephrasing your query or broadening the scope."
+            if filtered_df.empty: 
+                if filtered_df_extended.empty:
+                    return "The extended search did not find any matches in the Humanitarian Crises Database."
+                return agent2_extended_result
         
         # Step 3: Convert the filtered DataFrame
         print("[DEBUG] Step 3: Converting DataFrame to CSV...")
@@ -78,7 +87,7 @@ async def chat_pipeline(message, history):
 
         # Step 4: Agent 2 generates the Briefing Note based on the data
         print("[DEBUG] Step 4: Calling brief_writer...")
-        agent2_result = await brief_writer(data_as_csv_string, agent1_result.interpretation_notes)
+        agent2_result = await brief_writer(data_as_csv_string, message, agent1_result)
         print(f"[DEBUG] Agent 2 result length: {len(agent2_result)} characters")
         
         # Return the generated report to the UI
@@ -92,21 +101,273 @@ async def chat_pipeline(message, history):
         print(f"[ERROR] Traceback:\n{error_traceback}")
         return f"**Pipeline Error:** An error occurred while processing your request: `{str(e)}`\n\n<details><summary>Debug Info</summary>\n\n```\n{error_traceback}\n```\n</details>"
 
-# Configure the Gradio Interface
-print("[DEBUG] Configuring Gradio interface...")
-demo = gr.ChatInterface(
-    fn=chat_pipeline,
-    title="Geo-Insight: GapFinder Assistant",
-    description="Ask a natural language question about financial gaps in humanitarian crises. The system will query the underlying data and generate a professional Briefing Note for decision support.",
-    examples=[
-        "Show underfunded food crises in the Sahel since 2022.",
-        "Current state of Middle East",
-        "History of funding in Africa"
-    ]
-)
+# ==========================================
+# CUSTOM UI STYLING & BEHAVIOR
+# ==========================================
+
+custom_css = """
+/* Force background everywhere to remove dark stripes */
+html, body, gradio-app, .gradio-container {
+    background-color: #FDFBF7 !important; 
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* Force ALL text globally to be dark to prevent bleeding */
+html, body, gradio-app, .gradio-container, h1, h2, h3, h4, h5, h6, p, span, div, label, strong, b, em, i {
+    color: #111111 !important;
+}
+
+/* Center layouts */
+.center-container {
+    max-width: 800px !important;
+    margin: 15vh auto !important;
+}
+
+.paper-container {
+    max-width: 900px !important;
+    margin: 40px auto !important;
+}
+
+/* Fix Input Box styling */
+textarea {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    border: 1px solid #CCCCCC !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important;
+}
+textarea::placeholder {
+    color: #888888 !important;
+}
+
+/* ALL BUTTONS: Very light grey background, dark text */
+button, .gr-button, .gr-button-primary, .gr-button-secondary {
+    background-color: #F3F4F6 !important; /* Lighter grey */
+    color: #000000 !important;
+    border: 1px solid #D1D5DB !important;
+}
+button:hover, .gr-button:hover, .gr-button-primary:hover, .gr-button-secondary:hover {
+    background-color: #E5E7EB !important; /* Slightly darker on hover */
+}
+
+/* SEND BUTTON - custom color */
+.send-btn {
+    background-color: #6e5353 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #5a4444 !important;
+}
+
+.send-btn:hover {
+    background-color: #5a4444 !important;
+}
+
+.send-btn:active {
+    background-color: #4a3838 !important;
+}
+
+/* Fix Examples styling */
+.gr-samples button {
+    background-color: #FFFFFF !important;
+}
+.gr-samples button:hover {
+    background-color: #F9FAFB !important;
+}
+.gr-samples > span.label {
+    color: #666666 !important;
+}
+
+/* Paper view styling - STRICTLY ALL BLACK TEXT */
+.paper-box {
+    background-color: #FFFFFF !important;
+    padding: 60px 80px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important;
+    border: 1px solid #EAEAEA !important;
+    min-height: 800px;
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 16px;
+    line-height: 1.6;
+}
+.paper-box, .paper-box * {
+    color: #000000 !important; /* Forces all Markdown elements to be pure black */
+}
+
+/* Fix Markdown Code / Inline Code Styling */
+.paper-box code, .paper-box pre, code, pre {
+    background-color: #F5F5F5 !important; /* Light grey background for code */
+    color: #111111 !important;            /* Dark text */
+    border: 1px solid #E0E0E0 !important; /* Subtle border */
+    border-radius: 4px !important;
+    padding: 0.1em 0.3em !important;
+    font-family: monospace !important;
+}
+.paper-box pre {
+    padding: 1em !important;
+    overflow-x: auto !important;
+}
+.paper-box pre code {
+    border: none !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+}
+
+/* Spinning Wheel loader */
+.loader-wrapper {
+    text-align: center;
+    padding: 40px;
+}
+.spinner {
+    border: 5px solid #EAEAEA;
+    border-top: 5px solid #666666;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.loader-text {
+    margin-top: 20px;
+    font-size: 16px;
+}
+.loader-text, .loader-text * {
+    color: #000000 !important; /* Explicitly dark text for the loading message */
+}
+
+/* Button Layout for Results */
+.action-buttons {
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 15px !important;
+    margin-bottom: 20px !important;
+}
+
+/* ACTION BUTTONS - white text */
+.action-buttons button {
+    color: #FFFFFF !important;
+}
+
+/* Print specific styles */
+@media print {
+    body, .gradio-container, html { background-color: #FFFFFF !important; }
+    .action-buttons, footer, .gr-button { display: none !important; }
+    .paper-container { max-width: 100% !important; margin: 0 !important; }
+    .paper-box { 
+        box-shadow: none !important; 
+        border: none !important; 
+        padding: 0 !important; 
+    }
+}
+"""
+
+print("[DEBUG] Configuring custom Gradio layout...")
+
+with gr.Blocks(css=custom_css, theme=gr.themes.Default(neutral_hue="slate")) as demo:
+    
+    # ---------------------------
+    # VIEW 1: Input / Search
+    # ---------------------------
+    with gr.Column(visible=True, elem_classes=["center-container"]) as search_view:
+        gr.Markdown(
+            "<h1 style='text-align: center;'>Geo-Insight: GapFinder Assistant</h1>"
+            "<p style='text-align: center; color: #555555 !important; margin-bottom: 30px;'>Ask a natural language question about financial gaps in humanitarian crises. The system will query the underlying data and generate a professional Briefing Note.</p>"
+        )
+        
+        with gr.Row():
+            user_input = gr.Textbox(
+                placeholder="E.g., Show underfunded food crises in the Sahel since 2022...",
+                show_label=False,
+                scale=5,
+                container=False
+            )
+            submit_btn = gr.Button("Send", scale=1, elem_classes=["send-btn"])
+            
+        gr.Examples(
+            examples=[
+                "Show underfunded food crises in the Sahel since 2022.",
+                "Current state of Middle East",
+                "History of funding in Africa"
+            ],
+            inputs=user_input
+        )
+
+    # ---------------------------
+    # VIEW 2: Loading State
+    # ---------------------------
+    with gr.Column(visible=False, elem_classes=["center-container"]) as loading_view:
+        gr.HTML("""
+            <div class="loader-wrapper">
+                <div class="spinner"></div>
+                <div class="loader-text">
+                    <strong>Processing Query...</strong><br/>
+                    Retrieval could take 30-40s. Please wait.
+                </div>
+            </div>
+        """)
+
+    # ---------------------------
+    # VIEW 3: Results (Paper & Buttons)
+    # ---------------------------
+    with gr.Column(visible=False, elem_classes=["paper-container"]) as result_view:
+        with gr.Row(elem_classes=["action-buttons"]):
+            new_query_btn = gr.Button("New Query")
+            save_pdf_btn = gr.Button("Save as PDF")
+            
+        output_paper = gr.Markdown("", elem_classes=["paper-box"])
+
+    # ---------------------------
+    # Event Handlers
+    # ---------------------------
+    def transition_to_loading():
+        return [
+            gr.update(visible=False), # Hide search
+            gr.update(visible=True),  # Show loader
+            gr.update(visible=False)  # Hide result
+        ]
+        
+    async def run_pipeline_and_show(msg):
+        result = await chat_pipeline(msg)
+        return [
+            gr.update(visible=False), # Hide loader
+            gr.update(visible=True),  # Show result
+            result                    # Populate paper
+        ]
+        
+    def reset_app():
+        return [
+            gr.update(visible=True),  # Show search
+            gr.update(visible=False), # Hide loader
+            gr.update(visible=False), # Hide result
+            gr.update(value="")       # Clear text input
+        ]
+
+    # Triggering the pipeline (Button click or Enter key)
+    submit_btn.click(
+        fn=transition_to_loading, outputs=[search_view, loading_view, result_view]
+    ).then(
+        fn=run_pipeline_and_show, inputs=[user_input], outputs=[loading_view, result_view, output_paper]
+    )
+    
+    user_input.submit(
+        fn=transition_to_loading, outputs=[search_view, loading_view, result_view]
+    ).then(
+        fn=run_pipeline_and_show, inputs=[user_input], outputs=[loading_view, result_view, output_paper]
+    )
+
+    # Action buttons
+    new_query_btn.click(
+        fn=reset_app, outputs=[search_view, loading_view, result_view, user_input]
+    )
+    
+    # Save as PDF leverages the browser print function + print specific CSS
+    save_pdf_btn.click(
+        fn=None, inputs=None, outputs=None, js="() => { window.print(); }"
+    )
+
 print("[DEBUG] Gradio interface configured")
 
 # Launch the app for Databricks Apps (public access)
 if __name__ == "__main__":
     print("[DEBUG] Starting Gradio app launch...")
-    demo.launch()
+    demo.launch(share=True, inline=True)
