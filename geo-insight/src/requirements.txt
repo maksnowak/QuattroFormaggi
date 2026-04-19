@@ -1,0 +1,6 @@
+# Databricks Apps pre-installs: gradio==4.44.0, pandas, databricks-sdk, databricks-sql-connector
+# Only add packages not pre-installed
+
+anthropic
+pydantic
+typing_extensions

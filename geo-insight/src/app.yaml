@@ -1,0 +1,23 @@
+command: ['python', 'app.py']
+
+# Define secret resources from Databricks Secret Scopes
+resources:
+  - name: databricks_token
+    secret:
+      scope: datathon-scope
+      key: DATABRICKS_TOKEN
+  - name: anthropic_api_key
+    secret:
+      scope: datathon-scope
+      key: ANTHROPIC_API_KEY
+
+# Define environment variables
+env:
+  - name: ANTHROPIC_API_KEY
+    valueFrom: anthropic_api_key
+  - name: DATABRICKS_HOST
+    valueFrom: DATABRICKS_HOST  # Auto-injected by Databricks Apps
+  - name: DATABRICKS_TOKEN
+    valueFrom: databricks_token
+  - name: DATABRICKS_HTTP_PATH
+    value: "/sql/1.0/warehouses/6c4104be2379613e"  # Serverless Starter Warehouse
