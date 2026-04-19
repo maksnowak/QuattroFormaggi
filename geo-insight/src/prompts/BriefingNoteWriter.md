@@ -45,3 +45,4 @@ Write a highly scannable, but concise Briefing Note (approx. 200-300 words) usin
 - **Tone:** Professional, direct, objective, and analytical. Avoid academic jargon.
 - **Output:** Return ONLY the formatted Briefing Note. Do not include introductory filler like "Here is the briefing note".
 - Do not use horizontal rules (---) anywhere in the formatting.
+- Use full country names in the briefing.

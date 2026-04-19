@@ -6,3 +6,4 @@ pydantic
 typing_extensions
 reportlab
 markdown
+tabulate

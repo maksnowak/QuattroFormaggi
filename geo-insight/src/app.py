@@ -1,6 +1,7 @@
 import os
 import sys
 import traceback
+import pandas as pd
 
 # Add quattroformaggi module to path
 # In Databricks Apps, we use relative paths
@@ -81,7 +82,9 @@ async def chat_pipeline(message):
             if filtered_df.empty: 
                 if filtered_df_extended.empty:
                     return "The extended search did not find any matches in the Humanitarian Crises Database."
-                return agent2_extended_result
+                # Append extended dataframe to extended result
+                df_markdown = "\n\n---\n\n## Data Table\n\n" + filtered_df_extended.to_markdown(index=False)
+                return agent2_extended_result + df_markdown
         
         # Step 3: Convert the filtered DataFrame
         print("[DEBUG] Step 3: Converting DataFrame to CSV...")
@@ -95,9 +98,41 @@ async def chat_pipeline(message):
         agent2_result = await brief_writer(data_as_csv_string, message, articles_as_string, agent1_result)
         print(f"[DEBUG] Agent 2 result length: {len(agent2_result)} characters")
         
+        # Append the filtered DataFrame as a markdown table
+        print("[DEBUG] Appending filtered DataFrame to result...")
+        # 1. Agregacja (Grupujemy po kraju)
+        print_df = filtered_df.groupby("country_code").agg({
+            "population": "max", 
+            "total_required_funds": "sum", 
+            "total_granted_funds": "sum", 
+            "severity_index": "max" 
+        }).reset_index()
+
+
+
+        # 2. DROP - Usunięty, bo agg() i tak zostawia tylko te kolumny, które wymieniliśmy wyżej.
+        # Próba usunięcia nieistniejących kolumn rzuciłaby błąd.
+
+        # 3. Formatowanie kolumn (Używamy .map() lub .apply(), bo to są serie danych, nie pojedyncze skalarne wartości)
+        print_df['population'] = print_df['population'].map(lambda x: f"{x/1000000:.1f}M")
+        print_df['total_required_funds'] = print_df['total_required_funds'].map(lambda x: f"${x/1000000:.1f}M")
+        print_df['total_granted_funds'] = print_df['total_granted_funds'].map(lambda x: f"${x/1000000:.1f}M")
+
+        print_df = print_df.rename(columns={
+            "country_code": "Country",
+            "population": "Population",
+            "total_required_funds": "Required Funds",
+            "total_granted_funds": "Granted Funds",
+            "severity_index": "Severity Index"
+        })
+        
+        # 4. Tabela Markdown (Używamy print_df, czyli tej sformatowanej wersji, a nie filtered_df)
+        df_markdown = "\n\n---\n\n## Summary Data Table\n\n" + print_df.to_markdown(index=False)
+        final_result = agent2_result + df_markdown
+        
         # Return the generated report to the UI
         print("[DEBUG] === Pipeline completed successfully ===\n")
-        return agent2_result
+        return final_result
         
     except Exception as e:
         # Graceful error handling for the UI
@@ -214,6 +249,22 @@ button:hover, .gr-button:hover, .gr-button-primary:hover, .gr-button-secondary:h
     padding: 0 !important;
 }
 
+/* Table Styling - 100% width */
+.paper-box table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 1em 0 !important;
+}
+.paper-box table th, .paper-box table td {
+    border: 1px solid #DDDDDD !important;
+    padding: 8px 12px !important;
+    text-align: left !important;
+}
+.paper-box table th {
+    background-color: #F5F5F5 !important;
+    font-weight: bold !important;
+}
+
 /* Spinning Wheel loader */
 .loader-wrapper {
     text-align: center;
@@ -251,6 +302,46 @@ button:hover, .gr-button:hover, .gr-button-primary:hover, .gr-button-secondary:h
 /* ACTION BUTTONS - white text */
 .action-buttons button {
     color: #FFFFFF !important;
+}
+
+/* Mobile Responsive Styles */
+@media screen and (max-width: 768px) {
+    .center-container {
+        max-width: 95% !important;
+        margin: 5vh auto !important;
+    }
+    
+    .paper-container {
+        max-width: 95% !important;
+        margin: 20px auto !important;
+    }
+    
+    .paper-box {
+        padding: 30px 20px !important;
+        font-size: 14px !important;
+    }
+    
+    .action-buttons {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    
+    .action-buttons button {
+        width: 100% !important;
+    }
+    
+    /* Mobile table styles - scrollable container */
+    .paper-box table {
+        display: block !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        font-size: 12px !important;
+    }
+    
+    .paper-box table th, .paper-box table td {
+        padding: 6px 8px !important;
+        font-size: 12px !important;
+    }
 }
 
 /* Print specific styles */

@@ -40,7 +40,7 @@ def filter_articles(agent_json_string: str, connection, table_name: str) -> pd.D
         query += f" AND sector_code IN ({placeholders})"
         params.extend(sectors)
 
-    query+="LIMIT 20"
+    query+=" LIMIT 20"
 
     # 4. Wykonanie zapytania i zwrócenie wyników jako Pandas DataFrame
     with connection.cursor() as cursor:
